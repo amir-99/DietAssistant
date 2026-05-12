@@ -1,0 +1,79 @@
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - app_network
+    depends_on:
+      - ui
+      - api
+
+  ui:
+    build:
+      context: ./services/ui
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - API_BASE_URL=http://api:8000
+      - APP_PASSWORD=${APP_PASSWORD:-dietassistant}
+    networks:
+      - app_network
+    depends_on:
+      api:
+        condition: service_healthy
+
+  api:
+    build:
+      context: ./services/api
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - DATA_DIR=/app/data
+      - LLM_PROVIDER=${LLM_PROVIDER:-anthropic}
+      - LLM_MODEL=${LLM_MODEL:-claude-sonnet-4-6}
+      - LLM_BASE_URL=${LLM_BASE_URL:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - TZ=${TZ:-Asia/Tehran}
+      - MATCH_CONFIDENCE_AUTO=${MATCH_CONFIDENCE_AUTO:-90}
+      - MATCH_CONFIDENCE_CONFIRM=${MATCH_CONFIDENCE_CONFIRM:-70}
+    volumes:
+      - app_data:/app/data
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  backup:
+    build:
+      context: ./services/backup
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - DATA_DIR=/app/data
+      - BACKUP_DIR=/app/data/backups
+      - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-30}
+    volumes:
+      - app_data:/app/data
+    networks:
+      - app_network
+
+networks:
+  app_network:
+    driver: bridge
+
+volumes:
+  app_data:
+  caddy_data:
+  caddy_config:
