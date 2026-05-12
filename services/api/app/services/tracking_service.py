@@ -75,7 +75,7 @@ def get_daily_status(
     events = get_events(workbook_path, date_filter=target_date)
 
     logged_options = [e for e in events if e.log_type == "option"]
-    logged_items = [e for e in events if e.log_type in ("item", "mixed")]
+    logged_items = [e for e in events if e.log_type in ("item", "mixed", "unregistered")]
 
     # Section coverage
     section_coverage: dict = {}

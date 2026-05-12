@@ -196,13 +196,14 @@ def tool_log_consumption(
     raw_user_message: str,
 ) -> dict:
     """Write confirmed consumption entries to the Excel workbook.
-    Each entry must have at least log_type ('option' or 'item').
+    Each entry must have at least log_type ('option', 'item', or 'unregistered').
     Optional fields: section, option_no, source_option_text, item_name,
     consumed_qty_text, consumed_qty_numeric, consumed_unit, portion_fraction,
-    confidence, notes.
+    confidence, estimated_calories, notes.
     """
     written_ids = []
     today = deps.today()
+    newly_added_calories = 0.0
 
     for raw_entry in entries:
         entry_dict = _coerce_entry(raw_entry)
@@ -220,11 +221,31 @@ def tool_log_consumption(
             tz=deps.tz,
         )
         written_ids.append(event_id)
+        if entry.estimated_calories:
+            newly_added_calories += entry.estimated_calories
+
+    new_total = deps.total_calories_today + newly_added_calories
+    calorie_warnings: List[str] = []
+
+    if deps.calorie_goal > 0 and newly_added_calories > 0:
+        if new_total > deps.calorie_goal:
+            overage = new_total - deps.calorie_goal
+            calorie_warnings.append(
+                f"⚠️ Daily goal exceeded: adding this meal brings your total to ~{int(new_total)} kcal, "
+                f"which is ~{int(overage)} kcal over your {deps.calorie_goal} kcal goal."
+            )
+        elif new_total >= deps.calorie_goal * 0.8:
+            calorie_warnings.append(
+                f"⚠️ Approaching daily goal: your total is now ~{int(new_total)} kcal "
+                f"({int(new_total / deps.calorie_goal * 100)}% of your {deps.calorie_goal} kcal goal)."
+            )
 
     return {
         "written_event_ids": written_ids,
         "date": today,
         "count": len(written_ids),
+        "new_total_calories": round(new_total, 1),
+        "calorie_warnings": calorie_warnings,
     }
 
 
