@@ -175,8 +175,12 @@ def tool_match_consumption_to_plan(
     }
 
 
+import logging as _logging
+_tool_logger = _logging.getLogger(__name__)
+
+
 def _coerce_entry(raw) -> Optional[dict]:
-    """Accept a dict or a JSON string; return a dict or None."""
+    """Accept a dict, a JSON string, or a plain-text string; return a dict or None."""
     import json as _json
     if isinstance(raw, dict):
         return raw
@@ -187,6 +191,11 @@ def _coerce_entry(raw) -> Optional[dict]:
                 return _json.loads(raw)
             except Exception:
                 pass
+        # Fallback: the LLM passed a plain-text description instead of a dict.
+        # Salvage it as a generic item so nothing is silently dropped.
+        if raw:
+            _tool_logger.warning("log_consumption: entry was a plain string, salvaging as item_name: %r", raw[:80])
+            return {"log_type": "item", "item_name": raw, "notes": f"Auto-salvaged from plain text: {raw[:120]}"}
     return None
 
 

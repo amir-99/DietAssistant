@@ -1,7 +1,17 @@
 from __future__ import annotations
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 from datetime import datetime, date
+
+
+def _coerce_int(v):
+    """Coerce numeric values (including floats like 3.0) to int."""
+    if v is None:
+        return None
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return None
 
 
 class ConsumptionEvent(BaseModel):
@@ -9,7 +19,7 @@ class ConsumptionEvent(BaseModel):
     timestamp_local: str
     date_local: str
     raw_user_message: str
-    log_type: str  # option | item | mixed | correction
+    log_type: str  # option | item | mixed | unregistered | correction
     section: Optional[str] = None
     option_no: Optional[int] = None
     source_option_text: Optional[str] = None
@@ -22,6 +32,11 @@ class ConsumptionEvent(BaseModel):
     status: str = "confirmed"  # confirmed | needs_review | corrected | deleted
     estimated_calories: Optional[float] = None
     notes: Optional[str] = None
+
+    @field_validator("option_no", mode="before")
+    @classmethod
+    def coerce_option_no(cls, v):
+        return _coerce_int(v)
 
 
 class ConsumptionEventCreate(BaseModel):
@@ -38,6 +53,11 @@ class ConsumptionEventCreate(BaseModel):
     status: str = "confirmed"
     estimated_calories: Optional[float] = None
     notes: Optional[str] = None
+
+    @field_validator("option_no", mode="before")
+    @classmethod
+    def coerce_option_no(cls, v):
+        return _coerce_int(v)
 
 
 class LogRequest(BaseModel):
@@ -90,6 +110,14 @@ class AssistantRequest(BaseModel):
     date_override: Optional[str] = None
 
 
+class ReasoningStep(BaseModel):
+    tool_name: str
+    icon: str
+    label: str
+    args_summary: str
+    result_summary: str
+
+
 class AssistantResponse(BaseModel):
     assistant_text: str
     logged_entries: List[ConsumptionEvent] = []
@@ -99,3 +127,4 @@ class AssistantResponse(BaseModel):
     confirmation_requests: List[dict] = []
     status_preview: Optional[dict] = None
     session_id: str = "default"
+    reasoning_steps: List[ReasoningStep] = []

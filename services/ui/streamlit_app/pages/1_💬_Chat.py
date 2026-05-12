@@ -51,28 +51,73 @@ with st.sidebar:
     else:
         st.warning("⚠️ No diet plan uploaded yet")
 
-# Display conversation history
+
+def _render_reasoning_steps(steps: list) -> None:
+    """Render tool call steps in a friendly collapsible panel."""
+    if not steps:
+        return
+    with st.expander(f"🧠 {len(steps)} step(s) taken — click to see", expanded=False):
+        for i, step in enumerate(steps, 1):
+            icon = step.get("icon", "🔧")
+            label = step.get("label", step.get("tool_name", ""))
+            args_summary = step.get("args_summary", "")
+            result_summary = step.get("result_summary", "")
+
+            # Colour the result row based on content
+            is_warning = "⚠️" in result_summary or "Nothing was saved" in result_summary
+            is_ok = result_summary.startswith("Saved") or "✅" in result_summary
+
+            st.markdown(
+                f"""
+<div style="
+    border-left: 3px solid {'#FF9800' if is_warning else '#4CAF50' if is_ok else '#607D8B'};
+    padding: 6px 12px;
+    margin-bottom: 6px;
+    border-radius: 0 6px 6px 0;
+    background: rgba(0,0,0,0.03);
+">
+<strong>{i}. {icon} {label}</strong><br>
+<span style="color:#666;font-size:0.85em">Input: {args_summary}</span><br>
+<span style="color:{'#E65100' if is_warning else '#2E7D32' if is_ok else '#37474F'};font-size:0.85em">Result: {result_summary}</span>
+</div>
+""",
+                unsafe_allow_html=True,
+            )
+
+
+def _render_logged_entries(logged: list) -> None:
+    if not logged:
+        return
+    with st.expander(f"📋 {len(logged)} item(s) logged", expanded=True):
+        for e in logged:
+            badge = section_badge(e.get("section", "")) if e.get("section") else ""
+            item_desc = e.get("item_name") or (e.get("source_option_text") or "")[:60]
+            qty = e.get("consumed_qty_text", "")
+            cal = e.get("estimated_calories")
+            cal_str = f" · 🔥 ~{int(cal)} kcal" if cal else ""
+            log_type = e.get("log_type", "")
+            unregistered_tag = " ⚠️ *unregistered*" if log_type == "unregistered" else ""
+            st.markdown(
+                f"{badge} **{item_desc}** {qty}{cal_str}{unregistered_tag} "
+                f'<span style="color:#999;font-size:0.8em">#{e.get("event_id","")}</span>',
+                unsafe_allow_html=True,
+            )
+
+
+# ── Render conversation history ──────────────────────────────────────────────
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"], avatar="🌸" if msg["role"] == "assistant" else "👤"):
         st.markdown(msg["content"])
+        if msg.get("reasoning_steps"):
+            _render_reasoning_steps(msg["reasoning_steps"])
         if msg.get("logged_entries"):
-            with st.expander("📋 Logged entries", expanded=False):
-                for e in msg["logged_entries"]:
-                    badge = section_badge(e.get("section", "")) if e.get("section") else ""
-                    item_desc = e.get("item_name") or e.get("source_option_text", "")[:60]
-                    qty = e.get("consumed_qty_text", "")
-                    st.markdown(
-                        f"{badge} **{item_desc}** {qty} "
-                        f'<span style="color:#999;font-size:0.8em">#{e.get("event_id","")}</span>',
-                        unsafe_allow_html=True,
-                    )
-        if msg.get("warnings"):
-            for w in msg["warnings"]:
-                st.warning(w)
+            _render_logged_entries(msg["logged_entries"])
+        for w in msg.get("warnings", []):
+            st.warning(w)
         if msg.get("confirmation_requests"):
             st.info("⚠️ The assistant needs clarification — see the response above.")
 
-# Chat input
+# ── Chat input ───────────────────────────────────────────────────────────────
 user_input = st.chat_input("What did you eat? Ask anything... 🌸")
 if user_input:
     st.session_state.messages.append({"role": "user", "content": user_input})
@@ -88,7 +133,7 @@ if user_input:
                         "I'd love to help you track your meals, but I need your diet plan first! "
                         "Please go to the **Plan Manager** page and upload your Excel diet plan. 📋"
                     )
-                    result = {"assistant_text": response_text, "logged_entries": [], "warnings": [], "confirmation_requests": []}
+                    result = {"assistant_text": response_text, "logged_entries": [], "warnings": [], "reasoning_steps": []}
                 else:
                     result = api.send_message(
                         user_input,
@@ -97,30 +142,18 @@ if user_input:
                     response_text = result.get("assistant_text", "I'm not sure what happened. Please try again.")
             except Exception as exc:
                 response_text = f"Oops! Something went wrong: {exc} 😔"
-                result = {"assistant_text": response_text, "logged_entries": [], "warnings": [], "confirmation_requests": []}
+                result = {"assistant_text": response_text, "logged_entries": [], "warnings": [], "reasoning_steps": []}
 
         st.markdown(response_text)
-
-        logged = result.get("logged_entries", [])
-        warnings = result.get("warnings", [])
-
-        if logged:
-            with st.expander(f"📋 {len(logged)} item(s) logged", expanded=True):
-                for e in logged:
-                    badge = section_badge(e.get("section", "")) if e.get("section") else ""
-                    item_desc = e.get("item_name") or (e.get("source_option_text") or "")[:60]
-                    qty = e.get("consumed_qty_text", "")
-                    st.markdown(
-                        f"{badge} **{item_desc}** {qty} "
-                        f'<span style="color:#999;font-size:0.8em">#{e.get("event_id","")}</span>',
-                        unsafe_allow_html=True,
-                    )
-        for w in warnings:
+        _render_reasoning_steps(result.get("reasoning_steps", []))
+        _render_logged_entries(result.get("logged_entries", []))
+        for w in result.get("warnings", []):
             st.warning(w)
 
     st.session_state.messages.append({
         "role": "assistant",
         "content": response_text,
+        "reasoning_steps": result.get("reasoning_steps", []),
         "logged_entries": result.get("logged_entries", []),
         "warnings": result.get("warnings", []),
         "confirmation_requests": result.get("confirmation_requests", []),

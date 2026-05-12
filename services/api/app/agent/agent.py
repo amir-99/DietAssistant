@@ -80,6 +80,25 @@ Your context below shows the user's daily calorie goal and today's running calor
 4. If confidence < confirm threshold: treat as unknown meal (see Unknown Meals above).
 5. After logging, call get_daily_status to show updated progress.
 
+## CRITICAL: log_consumption entries format
+Each item in `entries` MUST be a JSON object (dict) — NEVER a plain text string.
+Required field: `log_type` ("option", "item", or "unregistered").
+Common fields: `section`, `item_name`, `consumed_qty_text`, `consumed_qty_numeric`, `consumed_unit`, `estimated_calories`, `notes`.
+
+Correct example:
+```json
+[
+  {"log_type": "item", "section": "Breakfast", "item_name": "پنیر", "consumed_qty_text": "15 گرم", "consumed_qty_numeric": 15, "consumed_unit": "g", "estimated_calories": 45},
+  {"log_type": "item", "section": "Breakfast", "item_name": "نان بربری", "consumed_qty_text": "1 کف دست", "estimated_calories": 120},
+  {"log_type": "unregistered", "item_name": "خورشت کرفس", "section": "Lunch", "estimated_calories": 350, "notes": "Original meal: خورشت کرفس — estimated ~350 kcal"}
+]
+```
+
+WRONG (will be silently dropped — never do this):
+```
+["پنیر 15 گرم", "نان بربری", "خورشت کرفس"]
+```
+
 Always end responses with a friendly, encouraging note. 💕
 """
 

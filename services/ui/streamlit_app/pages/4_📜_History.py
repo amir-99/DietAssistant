@@ -102,7 +102,7 @@ for ev in events:
         col_info, col_actions = st.columns([3, 1])
 
         with col_info:
-            st.markdown(f"{badge} **{title}**")
+            st.markdown(f"{badge} **{title}**", unsafe_allow_html=True)
             st.markdown(
                 f'<span style="background:{status_color};color:white;padding:2px 10px;'
                 f'border-radius:10px;font-size:0.8em">{status_val}</span>'
